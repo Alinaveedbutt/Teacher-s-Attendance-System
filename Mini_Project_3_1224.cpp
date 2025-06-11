@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <fstream>
 using namespace std;
 
 class Person {
@@ -18,14 +19,14 @@ public:
     }
     virtual void displayPersonalInfo() const {
         cout<<"Name: "<<name<<endl;
-        cout<< "ID: "<<id<<endl;
+        cout<<"ID: "<<id<<endl;
     }
     int getID() const { return id; }
+    string getName() const { return name; }
     virtual ~Person() {
-        cout <<"Person Destructor called"<<endl;
+        cout<<"Person Destructor called"<<endl;
     }
 };
-
 class TimeRecord {
 protected:
     string date;
@@ -42,6 +43,13 @@ public:
     void setOutTime() {
         cout<<"Enter time out (HH MM):"<<endl;
         cin>>outHour>>outMinute;
+    }
+    void setDate(string d) { date = d; }
+    void setTotalMinutes(int mins) {
+        inHour = 9;
+        inMinute = 0;
+        outHour = 9 + (mins / 60);
+        outMinute = mins % 60;
     }
     string getDate() const { return date; }
     void displayTimeRecord() const {
@@ -61,7 +69,6 @@ public:
         cout<<m;
     }
 };
-
 class Attendance : public TimeRecord {
     int lateInMinutes;
     int earlyGoMinutes;
@@ -98,7 +105,6 @@ public:
     int getShortHours() const { return shortHours; }
     int getExcessHours() const { return excessHours; }
 };
-
 class Teacher : public Person {
     string subject;
     string department;
@@ -107,8 +113,8 @@ class Teacher : public Person {
 public:
     Teacher() : Person(), subject(""), department(""), attendanceRecords(nullptr), attendanceCount(0) {}
     Teacher(string n,int i,string sub,string dept) {
-        Person::name = n;
-        Person::id = i;
+        name = n;
+        id = i;
         subject = sub;
         department = dept;
         attendanceRecords = nullptr;
@@ -144,109 +150,144 @@ public:
             attendanceRecords[i].displayAttendanceReport();
         }
     }
-    int getAttendanceCount() const { return attendanceCount; }
-    const Attendance* getAttendanceRecords() const { return attendanceRecords; }
-};
-
-class Admin : public Person {
-    string role;
-public:
-    Admin() : role("") {}
-    Admin(string n,int i,string r) {
-        Person::name = n;
-        Person::id = i;
-        role = r;
+    void saveToFile(ofstream& out) const {
+        out<<name<<'\n'<<id<<'\n'<<subject<<'\n'<<department<<'\n'<<attendanceCount<<'\n';
+        for(int i=0; i<attendanceCount; i++) {
+            out<<attendanceRecords[i].getDate()<<'\n'<<attendanceRecords[i].totalMinutes()<<'\n';
+        }
     }
-    void manageTeachers(Teacher* teachers,int count) {
-        cout<<"Manage Teachers Menu:"<<endl;
-        cout<<"Press 1 to View all teachers"<<endl;
-        cout<<"Press 2 to Search teacher by ID"<<endl;
-        cout<<"Press 3 to Exit"<<endl;
-        int choice;
-        do {
-            cout<<"Enter choice:"<<endl;
-            cin>>choice;
-            if(choice==1) {
-                for(int i=0; i<count; i++) {
-                    teachers[i].displayTeacherInfo();
-                    cout<<endl;
-                }
-            } else if(choice==2) {
-                int tid;
-                cout<<"Enter Teacher ID to search:"<<endl;
-                cin>>tid;
-                bool found=false;
-                for(int i=0; i<count; i++) {
-                    if(teachers[i].getID()==tid) {
-                        teachers[i].displayTeacherInfo();
-                        found=true;
-                        break;
-                    }
-                }
-                if(!found) cout<<"Teacher with ID "<<tid<<" not found"<<endl;
-            }
-        } while(choice!=3);
-    }
-    void viewReports(Teacher* teachers,int count) {
-        cout<<"Attendance Summaries for All Teachers:"<<endl;
-        for(int i=0; i<count; i++) {
-            teachers[i].displayTeacherInfo();
-            cout<<endl;
+    void loadFromFile(ifstream& in) {
+        getline(in,name);
+        in>>id;
+        in.ignore();
+        getline(in,subject);
+        getline(in,department);
+        in>>attendanceCount;
+        in.ignore();
+        attendanceRecords = new Attendance[attendanceCount];
+        for(int i=0; i<attendanceCount; i++) {
+            string d;
+            int mins;
+            getline(in,d);
+            in>>mins;
+            in.ignore();
+            attendanceRecords[i].setDate(d);
+            attendanceRecords[i].setTotalMinutes(mins);
+            attendanceRecords[i].calculateMetrics();
         }
     }
 };
-
-class ReportGenerator {
-    Teacher* teachers;
-    int teacherCount;
-public:
-    ReportGenerator() : teachers(nullptr), teacherCount(0) {}
-    ~ReportGenerator() {
-        delete[] teachers;
-        cout<<"Report Generator destructor called"<<endl;
+void saveTeachersToFile(Teacher* t,int count) {
+    ofstream out("teachers.txt");
+    out<<count<<'\n';
+    for(int i=0; i<count; i++) {
+        t[i].saveToFile(out);
     }
-    void inputTeachers() {
-        cout<<"How many teachers do you want to input?"<<endl;
-        cin>>teacherCount;
-        teachers = new Teacher[teacherCount];
-        for(int i=0; i<teacherCount; i++) {
-            cout<<"Enter details for Teacher "<<(i+1)<<endl;
-            teachers[i].getTeacherDetails();
+    out.close();
+    cout<<"Data saved to teachers.txt"<<endl;
+}
+void loadTeachersFromFile(Teacher*& t,int& count) {
+    ifstream in("teachers.txt");
+    if(!in) {
+        cout<<"File not found."<<endl;
+        return;
+    }
+    in>>count;
+    in.ignore();
+    t = new Teacher[count];
+    for(int i=0; i<count; i++) {
+        t[i].loadFromFile(in);
+    }
+    in.close();
+    cout<<"Data loaded from teachers.txt"<<endl;
+}
+void searchTeacher(Teacher* t,int count,int id) {
+    for(int i=0; i<count; i++) {
+        if(t[i].getID() == id) {
+            t[i].displayTeacherInfo();
+            return;
         }
     }
-    void generateDailyReport() const {
-        cout<<"Daily Attendance Report:"<<endl;
-        for(int i=0; i<teacherCount; i++) {
-            cout<<"Teacher # "<<(i+1)<<endl;
-            teachers[i].displayTeacherInfo();
-            cout<<endl;
+    cout<<"Teacher with ID "<<id<<" not found."<<endl;
+}
+void deleteTeacher(Teacher*& t,int& count,int id) {
+    int idx = -1;
+    for(int i=0; i<count; i++) {
+        if(t[i].getID() == id) {
+            idx = i;
+            break;
         }
     }
-    void generateMonthlyReports() const {
-        cout<<"Monthly Attendance Report:"<<endl;
-        for(int i=0; i<teacherCount; i++) {
-            int totalLate=0,totalEarly=0,totalShort=0,totalExcess=0;
-            const Attendance* records=teachers[i].getAttendanceRecords();
-            int count=teachers[i].getAttendanceCount();
-            for(int j=0; j<count; j++) {
-                totalLate += records[j].getLateInMinutes();
-                totalEarly += records[j].getEarlyGoMinutes();
-                totalShort += records[j].getShortHours();
-                totalExcess += records[j].getExcessHours();
-            }
-            cout<<"Teacher ID: "<<teachers[i].getID()<<endl;
-            cout<<"Total Late In (minutes): "<<totalLate<<endl;
-            cout<<"Total Early Go (minutes): "<<totalEarly<<endl;
-            cout<<"Total Short Hours (minutes): "<<totalShort<<endl;
-            cout<<"Total Excess Hours (minutes): "<<totalExcess<<endl;
-            cout<<endl;
-        }
+    if(idx == -1) {
+        cout<<"Teacher not found."<<endl;
+        return;
     }
-};
+    Teacher* temp = new Teacher[count-1];
+    for(int i=0, j=0; i<count; i++) {
+        if(i != idx) temp[j++] = t[i];
+    }
+    delete[] t;
+    t = temp;
+    count--;
+    cout<<"Teacher deleted."<<endl;
+    saveTeachersToFile(t,count);
+}
 int main() {
-    ReportGenerator system;
-    system.inputTeachers();
-    system.generateDailyReport();
-    system.generateMonthlyReports();
+    Teacher* teachers = nullptr;
+    int teacherCount = 0;
+    int choice;
+    do {
+        cout<<endl;
+        cout<<"Menu:"<<endl;
+        cout<<"1. Add Teacher"<<endl;
+        cout<<"2. Display All"<<endl;
+        cout<<"3. Save"<<endl;
+        cout<<"4. Load"<<endl;
+        cout<<"5. Search"<<endl;
+        cout<<"6. Delete"<<endl;
+        cout<<"7. Exit"<<endl;
+        cout<<"Enter choice:"<<endl;
+        cin>>choice;
+        if(choice == 1) {
+            cout<<"Enter number of teachers to add:"<<endl;
+            int n;
+            cin>>n;
+            Teacher* newList = new Teacher[teacherCount+n];
+            for(int i=0; i<teacherCount; i++)
+                newList[i] = teachers[i];
+            for(int i=teacherCount; i<teacherCount+n; i++) {
+                newList[i].getTeacherDetails();
+            }
+            delete[] teachers;
+            teachers = newList;
+            teacherCount += n;
+        }
+        else if(choice == 2) {
+            for(int i=0; i<teacherCount; i++) {
+                teachers[i].displayTeacherInfo();
+                cout<<endl;
+            }
+        }
+        else if(choice == 3) {
+            saveTeachersToFile(teachers, teacherCount);
+        }
+        else if(choice == 4) {
+            loadTeachersFromFile(teachers, teacherCount);
+        }
+        else if(choice == 5) {
+            int id;
+            cout<<"Enter ID to search:"<<endl;
+            cin>>id;
+            searchTeacher(teachers, teacherCount, id);
+        }
+        else if(choice == 6) {
+            int id;
+            cout<<"Enter ID to delete:"<<endl;
+            cin>>id;
+            deleteTeacher(teachers, teacherCount, id);
+        }
+    }
+    while(choice != 7);
+    delete[] teachers;
     return 0;
 }
